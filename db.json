@@ -1,0 +1,36 @@
+{
+  "pedidos": [
+    {
+      "id": "1",
+      "cliente": "María Rojas",
+      "total": 32000,
+      "estado": "rechazado",
+      "motivo": "Fuera de zona de cobertura"
+    },
+    {
+      "id": "2",
+      "cliente": "Luis Vargas",
+      "total": 75000,
+      "estado": "pendiente"
+    },
+    {
+      "id": "3",
+      "cliente": "",
+      "total": 15000,
+      "estado": "pendiente"
+    },
+    {
+      "id": "4",
+      "cliente": "Ana Mora",
+      "total": 48000,
+      "estado": "pendiente"
+    },
+    {
+      "id": "5",
+      "cliente": "Pedro Solano",
+      "total": 20000,
+      "estado": "pendiente"
+    }
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
+}
