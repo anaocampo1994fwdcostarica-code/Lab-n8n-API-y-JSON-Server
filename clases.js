@@ -1,12 +1,19 @@
 class Pedido {
-  constructor({ id, cliente, total }) {
+  constructor(datos = {}) {
+    const { id, cliente, total } = datos || {};
     this.id = id;
     this.cliente = cliente;
     this.total = total;
   }
 
   estaCompleto() {
-    return Boolean(this.cliente) && this.total > 0;
+    return (
+      typeof this.cliente === "string" &&
+      this.cliente.trim().length > 0 &&
+      typeof this.total === "number" &&
+      Number.isFinite(this.total) &&
+      this.total > 0
+    );
   }
 
   tieneEnvioGratis() {
@@ -33,18 +40,33 @@ class ZonaCobertura {
 
   calcularCostoEnvio(region, pedido) {
     const r = this.limpiar(region);
+    const zonaPrincipal = this.zonasPrincipales.some((z) => r.includes(z));
+    const zonaExtendida = this.zonasExtendidas.some((z) => r.includes(z));
+    if (!zonaPrincipal && !zonaExtendida) return null;
     if (pedido.tieneEnvioGratis()) return 0;
-    if (this.zonasPrincipales.some((z) => r.includes(z))) return 2500;
-    if (this.zonasExtendidas.some((z) => r.includes(z))) return 4500;
-    return null;
+    return zonaPrincipal ? 2500 : 4500;
   }
 
   evaluar(pedido, ubicacion) {
-    if (!pedido.estaCompleto()) {
+    if (
+      !pedido ||
+      typeof pedido.estaCompleto !== "function" ||
+      !pedido.estaCompleto()
+    ) {
+      return { estado: "rechazado", motivo: "Datos incompletos" };
+    }
+    if (!ubicacion || !ubicacion.status) {
       return { estado: "rechazado", motivo: "Datos incompletos" };
     }
     if (ubicacion.status !== "success") {
       return { estado: "rechazado", motivo: "No se pudo verificar la ubicación" };
+    }
+    if (
+      typeof ubicacion.countryCode !== "string" ||
+      typeof ubicacion.regionName !== "string" ||
+      !ubicacion.regionName.trim()
+    ) {
+      return { estado: "rechazado", motivo: "Datos incompletos" };
     }
     if (!this.estaEnCobertura(ubicacion.countryCode)) {
       return { estado: "rechazado", motivo: "Fuera de zona de cobertura" };

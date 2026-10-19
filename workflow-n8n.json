@@ -1,0 +1,271 @@
+{
+  "name": "My workflow 6",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pedido-cobertura",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -848,
+        -400
+      ],
+      "id": "abbfbd3d-9cae-48e5-b383-ef7f2b759d4e",
+      "name": "Webhook",
+      "webhookId": "815a2457-9b06-4a0d-a780-3e0f52da4836"
+    },
+    {
+      "parameters": {
+        "url": "=http://localhost:3000/pedidos/{{ $json.body.pedidoId }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -592,
+        -400
+      ],
+      "id": "8e4191d4-ec55-46e7-b3e2-db6098796687",
+      "name": "Buscar pedido",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=http://ip-api.com/json/{{ $('Webhook').item.json.body.ip }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -384,
+        -656
+      ],
+      "id": "5b3c2adb-da3f-44d3-8b69-a601f3689ea1",
+      "name": "Consultar IP",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ====== TUS CLASES ======\nclass Pedido {\n  constructor({ id, cliente, total }) {\n    this.id = id;\n    this.cliente = cliente;\n    this.total = total;\n  }\n\n  estaCompleto() {\n    return Boolean(this.cliente) && this.total > 0;\n  }\n\n  tieneEnvioGratis() {\n    return this.total >= 50000;\n  }\n}\n\nclass ZonaCobertura {\n  constructor() {\n    this.zonasPrincipales = [\"san jose\", \"heredia\", \"alajuela\", \"cartago\"];\n    this.zonasExtendidas = [\"guanacaste\", \"puntarenas\", \"limon\"];\n  }\n\n  limpiar(texto) {\n    return (texto || \"\")\n      .normalize(\"NFD\")\n      .replace(/[\\u0300-\\u036f]/g, \"\")\n      .toLowerCase();\n  }\n\n  estaEnCobertura(codigoPais) {\n    return codigoPais === \"CR\";\n  }\n\n  calcularCostoEnvio(region, pedido) {\n    const r = this.limpiar(region);\n    if (pedido.tieneEnvioGratis()) return 0;\n    if (this.zonasPrincipales.some((z) => r.includes(z))) return 2500;\n    if (this.zonasExtendidas.some((z) => r.includes(z))) return 4500;\n    return null;\n  }\n\n  evaluar(pedido, ubicacion) {\n    if (!pedido.estaCompleto()) {\n      return { estado: \"rechazado\", motivo: \"Datos incompletos\" };\n    }\n    if (ubicacion.status !== \"success\") {\n      return { estado: \"rechazado\", motivo: \"No se pudo verificar la ubicación\" };\n    }\n    if (!this.estaEnCobertura(ubicacion.countryCode)) {\n      return { estado: \"rechazado\", motivo: \"Fuera de zona de cobertura\" };\n    }\n    const costo = this.calcularCostoEnvio(ubicacion.regionName, pedido);\n    if (costo === null) {\n      return { estado: \"rechazado\", motivo: \"Zona no reconocida\" };\n    }\n    return { estado: \"aceptado\", motivo: \"\", costoEnvio: costo };\n  }\n}\n\n// ====== CONEXIÓN CON LOS DATOS REALES DE N8N ======\nconst pedido = new Pedido($('Buscar pedido').first().json);\nconst ubicacion = $input.first().json;\nconst resultado = new ZonaCobertura().evaluar(pedido, ubicacion);\n\nreturn [{ json: { id: pedido.id, ubicacion: ubicacion.regionName, ...resultado } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        -400
+      ],
+      "id": "3d3120cb-818a-4ad6-aed5-2e93e87058b3",
+      "name": "Evaluar cobertura"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a61a98c2-5dfe-49b0-bfba-1cb880b1bd46",
+              "leftValue": "={{ $json.estado }}",
+              "rightValue": "aceptado",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -16,
+        -400
+      ],
+      "id": "96f82f30-01ff-4b20-9da7-2156d5f3f3fd",
+      "name": "¿Está en cobertura?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d0b6f055-c395-468d-96b8-8ad353c37650",
+              "name": "respuesta",
+              "value": "El pedido no existe",
+              "type": "string"
+            },
+            {
+              "id": "0b1017a5-5465-4c7e-92f7-da374125f943",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -448,
+        -160
+      ],
+      "id": "341ae70d-9368-4516-8566-0d39bda9b628",
+      "name": "Pedido no existe"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://localhost:3000/pedidos/{{ $json.id }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "estado",
+              "value": "={{ $json.estado }}"
+            },
+            {
+              "name": "costoEnvio",
+              "value": "={{ $json.costoEnvio }}"
+            },
+            {
+              "name": "ubicacion",
+              "value": "={{ $json.ubicacion }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        176,
+        -624
+      ],
+      "id": "749e0752-9e8f-447f-a3b8-01ab4d9ae39c",
+      "name": "Aceptar pedido"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://localhost:3000/pedidos/{{ $json.id }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "estado",
+              "value": "={{ $json.estado }}"
+            },
+            {
+              "name": "motivo",
+              "value": "={{ $json.motivo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        176,
+        -208
+      ],
+      "id": "9db9c943-a04b-458a-ade8-d15a33389806",
+      "name": "Rechazar pedido"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Buscar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pedido": {
+      "main": [
+        [
+          {
+            "node": "Consultar IP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pedido no existe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar IP": {
+      "main": [
+        [
+          {
+            "node": "Evaluar cobertura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar cobertura": {
+      "main": [
+        [
+          {
+            "node": "¿Está en cobertura?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Está en cobertura?": {
+      "main": [
+        [
+          {
+            "node": "Aceptar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rechazar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "09f3ed0c-d45e-4f54-af66-55077fc75301",
+  "meta": {
+    "instanceId": "847d8f7cbb1cf00d2d4471b8ca344b8876c0bd943dadd963410c18299b68d07a"
+  },
+  "nodeGroups": [],
+  "id": "ObPvCsgv1oCOYsXR",
+  "tags": []
+}
