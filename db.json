@@ -11,13 +11,16 @@
       "id": "2",
       "cliente": "Luis Vargas",
       "total": 75000,
-      "estado": "pendiente"
+      "estado": "aceptado",
+      "costoEnvio": 0,
+      "ubicacion": "Provincia de San José"
     },
     {
       "id": "3",
       "cliente": "",
       "total": 15000,
-      "estado": "pendiente"
+      "estado": "rechazado",
+      "motivo": "Datos incompletos"
     },
     {
       "id": "4",
