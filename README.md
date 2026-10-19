@@ -1,96 +1,125 @@
-# Laboratorio de POO, n8n y JSON Server
+# Laboratorio POO y n8n
 
-## Escenario 2: pedidos con verificación geográfica de cobertura
+## Pedidos con verificación geográfica de cobertura
 
-Este proyecto automatiza la revisión de pedidos para determinar si pueden entregarse en Costa Rica y cuánto cuesta el envío. La ubicación geográfica se obtiene a partir de la dirección IP que llega al Webhook.
+Este proyecto automatiza la validación de pedidos de una tienda. El workflow recibe el identificador del pedido y una dirección IP, consulta el pedido en JSON Server, obtiene la ubicación aproximada mediante IP-API y decide si la entrega puede realizarse y cuál es su costo. La lógica de negocio se modela con clases de JavaScript y se aplica en el nodo Code de n8n.
 
-## Problema que resuelve
+## Tecnologías usadas
 
-Antes de aceptar un pedido, es necesario verificar que exista, que tenga un cliente y un total válido, y que su ubicación corresponda a una zona de cobertura reconocida. El flujo aplica las mismas reglas de forma consistente y devuelve una decisión de aceptación o rechazo con el motivo correspondiente.
+- **n8n:** orquesta el proceso y sus rutas de aceptación, rechazo y error.
+- **JSON Server:** funciona como API REST local para consultar y actualizar pedidos.
+- **JavaScript POO:** modela las entidades `Pedido` y `ZonaCobertura`.
+- **IP-API:** obtiene el país y la región asociados con la dirección IP.
+- **Postman:** permite enviar solicitudes de prueba al Webhook.
 
-## Componentes
+## Archivos principales
 
-- **JSON Server:** expone `db.json` como una API REST local para consultar los pedidos.
-- **n8n:** coordina la recepción de la solicitud, la búsqueda del pedido, la consulta geográfica, la evaluación y la respuesta.
-- **IP-API:** obtiene datos aproximados de ubicación para la IP consultada, incluidos el código de país y la región. La evaluación solo considera ubicaciones con `countryCode` igual a `CR`.
-- **Clases JavaScript:** implementan las validaciones del pedido y las reglas de cobertura en `clases.js`.
+- `db.json`: contiene los pedidos utilizados por JSON Server.
+- `clases.js`: contiene las clases y reglas de negocio en JavaScript.
+- `workflow-n8n.json`: contiene el workflow exportado de n8n.
+- `Documento_Logica_Negocio.pdf`: explica el problema, el flujo y las decisiones técnicas.
 
 ## Recorrido del workflow
 
-El flujo del escenario debe recorrer estos pasos:
+La ruta principal es:
 
-1. **Webhook** recibe la solicitud y el identificador del pedido.
-2. **Buscar pedido** consulta en JSON Server el pedido correspondiente.
-3. **Pedido no existe** responde con rechazo si la consulta no encuentra el pedido.
-4. **Consultar IP** solicita a IP-API información geográfica de la IP recibida.
-5. **Evaluar cobertura** aplica las validaciones del pedido y de ubicación.
-6. **¿Está en cobertura?** dirige el resultado a la respuesta correspondiente.
-7. **Aceptar pedido** devuelve la aceptación y el costo de envío calculado.
-8. **Rechazar pedido** devuelve el rechazo y su motivo.
+```text
+Webhook → Buscar pedido → Consultar IP → Evaluar cobertura → If
+                                                             ├─ Aceptar pedido
+                                                             └─ Rechazar pedido
+```
 
-El archivo `workflow-n8n.json` contiene los nodos y sus conexiones, incluida una rama controlada para los errores de consulta a IP-API.
+El workflow también contempla estas rutas de error:
+
+- **Pedido no existe:** se utiliza cuando JSON Server no encuentra el identificador solicitado.
+- **Error al consultar IP:** captura un fallo técnico de IP-API y dirige el resultado a **Rechazar pedido** con un motivo claro.
+
+Los nodos **Aceptar pedido** y **Rechazar pedido** actualizan el registro correspondiente en JSON Server.
 
 ## Reglas de negocio
 
-- El pedido debe tener un cliente no vacío y un total numérico mayor que cero.
-- La ubicación debe estar verificada y contener país y región.
-- Solo se acepta el país identificado con el código `CR` (Costa Rica).
-- Las zonas principales son San José, Heredia, Alajuela y Cartago. El envío cuesta ₡2.500.
-- Las zonas extendidas son Guanacaste, Puntarenas y Limón. El envío cuesta ₡4.500.
-- El envío es gratis para pedidos de ₡50.000 o más, siempre que la zona esté reconocida.
-- Se rechazan los datos incompletos, las ubicaciones no verificadas y las zonas que no se reconocen.
+- El cliente debe ser texto no vacío después de eliminar espacios al inicio y al final.
+- El total debe ser numérico, finito y mayor que cero.
+- Solo se aceptan ubicaciones de Costa Rica, identificadas con el código `CR`.
+- Las zonas principales son San José, Heredia, Alajuela y Cartago; el envío cuesta **₡2 500**.
+- Las zonas extendidas son Guanacaste, Puntarenas y Limón; el envío cuesta **₡4 500**.
+- Las regiones que no pertenecen a una zona reconocida se rechazan.
+- El envío es gratis únicamente cuando el total es igual o mayor a **₡50 000** y la región ya fue reconocida.
 
-## Clases JavaScript
+## Ejecutar JSON Server
 
-- **`Pedido`** representa un pedido y valida que tenga cliente y total válido. También determina si cumple el mínimo para envío gratis.
-- **`ZonaCobertura`** comprueba el código de país, reconoce las regiones de cobertura, calcula el envío y devuelve el resultado de la evaluación.
-
-Puedes revisar o ejecutar las clases con:
+Desde la carpeta principal del repositorio, instala las dependencias e inicia la API:
 
 ```bash
-node main.js
+npm install
+npm run api
 ```
 
-## Ejecución de JSON Server
+JSON Server queda disponible en `http://localhost:3000` y los pedidos en `http://localhost:3000/pedidos`.
 
-Desde la carpeta principal del repositorio, inicia la API en el puerto 3000:
+## Probar el workflow con n8n y Postman
 
-```bash
-npx json-server --watch db.json --port 3000
-```
+1. Importa `workflow-n8n.json` en n8n.
+2. Verifica que JSON Server esté ejecutándose.
+3. En n8n, presiona **Execute workflow** antes de cada prueba para habilitar temporalmente el Webhook de prueba.
+4. En Postman, configura la solicitud:
 
-Con la base de datos disponible, los pedidos se consultan en `http://localhost:3000/pedidos`.
-
-## Prueba del Webhook desde Postman
-
-1. Importa `workflow-n8n.json` en n8n y activa el workflow para usar la URL de producción, o selecciona **Listen for test event** para una prueba.
-2. En Postman, crea una solicitud con estos datos:
    - **Método:** `POST`
-   - **Ruta de producción:** `/webhook/pedido-cobertura`
-   - **Ruta de prueba:** `/webhook-test/pedido-cobertura`
+   - **URL:** `http://localhost:5678/webhook-test/pedido-cobertura`
    - **Header:** `Content-Type: application/json`
-   - **Cuerpo:**
+   - **Body:** selecciona `raw` y formato JSON.
 
 ```json
 {
   "pedidoId": "2",
+  "ip": "201.202.14.240"
+}
+```
+
+La dirección IP debe sustituirse por una IP pública válida de la ubicación que se quiera probar. IP-API proporciona una ubicación aproximada, por lo que el país y la región obtenidos dependen de la IP utilizada.
+
+## Ejemplos de pruebas
+
+### Pedido aceptado
+
+Utiliza el pedido `2` y una IP válida de Costa Rica cuya región sea reconocida. Como el total del pedido es igual o mayor a ₡50 000, el resultado esperado es `aceptado` con costo de envío `0`.
+
+```json
+{
+  "pedidoId": "2",
+  "ip": "201.202.14.240"
+}
+```
+
+### Fuera de cobertura
+
+Utiliza un pedido válido y una IP de un país diferente de Costa Rica. El resultado esperado es `rechazado` con el motivo `Fuera de zona de cobertura`.
+
+```json
+{
+  "pedidoId": "1",
   "ip": "8.8.8.8"
 }
 ```
 
-3. Envía la solicitud y revisa la respuesta de aceptación o rechazo.
-4. Asegúrate de que JSON Server esté ejecutándose y de que las URL de JSON Server e IP-API sean accesibles desde el entorno donde corre n8n.
+### Datos incompletos
 
-## Archivos del proyecto
+El pedido `3` no tiene un cliente válido. Con una IP válida, el resultado esperado es `rechazado` con el motivo `Datos incompletos`.
 
-- [Workflow de n8n](./workflow-n8n.json)
-- [Clases JavaScript](./clases.js)
-- [Base de datos](./db.json)
-- [Documento de lógica de negocio](./Documento_Logica_Negocio.pdf)
+```json
+{
+  "pedidoId": "3",
+  "ip": "201.202.14.240"
+}
+```
 
-## Entregables incluidos
+### Pedido inexistente
 
-- `workflow-n8n.json`: workflow exportado de n8n.
-- `clases.js` y `main.js`: modelo de POO y prueba independiente.
-- `db.json`: datos para JSON Server.
-- `Documento_Logica_Negocio.pdf`: documento de lógica de negocio.
+Utiliza un identificador que no exista en `db.json`. El workflow debe seguir la ruta **Pedido no existe**.
+
+```json
+{
+  "pedidoId": "999",
+  "ip": "201.202.14.240"
+}
+```
