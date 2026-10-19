@@ -28,7 +28,7 @@ El flujo del escenario debe recorrer estos pasos:
 7. **Aceptar pedido** devuelve la aceptación y el costo de envío calculado.
 8. **Rechazar pedido** devuelve el rechazo y su motivo.
 
-El archivo exportado de n8n debe contener esos nodos y sus conexiones. El workflow todavía no está exportado en la carpeta principal; consulta la sección de entregables pendientes al final.
+El archivo `workflow-n8n.json` contiene los nodos y sus conexiones, incluida una rama controlada para los errores de consulta a IP-API.
 
 ## Reglas de negocio
 
@@ -63,13 +63,23 @@ Con la base de datos disponible, los pedidos se consultan en `http://localhost:3
 
 ## Prueba del Webhook desde Postman
 
-1. Importa el workflow exportado en n8n y activa el Webhook.
-2. Copia la URL de producción del nodo Webhook (o usa la URL de prueba mientras el workflow está en modo de escucha).
-3. En Postman, crea una solicitud `GET` a esa URL y agrega el identificador del pedido como parámetro de consulta `id`, por ejemplo: `?id=2`.
-4. Envía la solicitud y revisa la respuesta de aceptación o rechazo.
-5. Asegúrate de que JSON Server esté ejecutándose y de que el workflow tenga configuradas las URL de JSON Server e IP-API para tu entorno.
+1. Importa `workflow-n8n.json` en n8n y activa el workflow para usar la URL de producción, o selecciona **Listen for test event** para una prueba.
+2. En Postman, crea una solicitud con estos datos:
+   - **Método:** `POST`
+   - **Ruta de producción:** `/webhook/pedido-cobertura`
+   - **Ruta de prueba:** `/webhook-test/pedido-cobertura`
+   - **Header:** `Content-Type: application/json`
+   - **Cuerpo:**
 
-El método HTTP, el nombre del parámetro y el formato de respuesta deben coincidir con la configuración real del Webhook al exportar el workflow.
+```json
+{
+  "pedidoId": "2",
+  "ip": "8.8.8.8"
+}
+```
+
+3. Envía la solicitud y revisa la respuesta de aceptación o rechazo.
+4. Asegúrate de que JSON Server esté ejecutándose y de que las URL de JSON Server e IP-API sean accesibles desde el entorno donde corre n8n.
 
 ## Archivos del proyecto
 
@@ -78,7 +88,9 @@ El método HTTP, el nombre del parámetro y el formato de respuesta deben coinci
 - [Base de datos](./db.json)
 - [Documento de lógica de negocio](./Documento_Logica_Negocio.pdf)
 
-## Entregables pendientes
+## Entregables incluidos
 
-- `workflow-n8n.json` no está en la carpeta principal. Exporta desde n8n el workflow existente en formato JSON y guarda la exportación con ese nombre; no se ha creado un workflow alternativo.
-- `Documento_Logica_Negocio.pdf` no está en la carpeta principal. Agrégalo manualmente con ese nombre.
+- `workflow-n8n.json`: workflow exportado de n8n.
+- `clases.js` y `main.js`: modelo de POO y prueba independiente.
+- `db.json`: datos para JSON Server.
+- `Documento_Logica_Negocio.pdf`: documento de lógica de negocio.

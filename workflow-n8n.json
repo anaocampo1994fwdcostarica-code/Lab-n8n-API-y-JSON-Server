@@ -50,7 +50,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ====== TUS CLASES ======\nclass Pedido {\n  constructor({ id, cliente, total }) {\n    this.id = id;\n    this.cliente = cliente;\n    this.total = total;\n  }\n\n  estaCompleto() {\n    return Boolean(this.cliente) && this.total > 0;\n  }\n\n  tieneEnvioGratis() {\n    return this.total >= 50000;\n  }\n}\n\nclass ZonaCobertura {\n  constructor() {\n    this.zonasPrincipales = [\"san jose\", \"heredia\", \"alajuela\", \"cartago\"];\n    this.zonasExtendidas = [\"guanacaste\", \"puntarenas\", \"limon\"];\n  }\n\n  limpiar(texto) {\n    return (texto || \"\")\n      .normalize(\"NFD\")\n      .replace(/[\\u0300-\\u036f]/g, \"\")\n      .toLowerCase();\n  }\n\n  estaEnCobertura(codigoPais) {\n    return codigoPais === \"CR\";\n  }\n\n  calcularCostoEnvio(region, pedido) {\n    const r = this.limpiar(region);\n    if (pedido.tieneEnvioGratis()) return 0;\n    if (this.zonasPrincipales.some((z) => r.includes(z))) return 2500;\n    if (this.zonasExtendidas.some((z) => r.includes(z))) return 4500;\n    return null;\n  }\n\n  evaluar(pedido, ubicacion) {\n    if (!pedido.estaCompleto()) {\n      return { estado: \"rechazado\", motivo: \"Datos incompletos\" };\n    }\n    if (ubicacion.status !== \"success\") {\n      return { estado: \"rechazado\", motivo: \"No se pudo verificar la ubicación\" };\n    }\n    if (!this.estaEnCobertura(ubicacion.countryCode)) {\n      return { estado: \"rechazado\", motivo: \"Fuera de zona de cobertura\" };\n    }\n    const costo = this.calcularCostoEnvio(ubicacion.regionName, pedido);\n    if (costo === null) {\n      return { estado: \"rechazado\", motivo: \"Zona no reconocida\" };\n    }\n    return { estado: \"aceptado\", motivo: \"\", costoEnvio: costo };\n  }\n}\n\n// ====== CONEXIÓN CON LOS DATOS REALES DE N8N ======\nconst pedido = new Pedido($('Buscar pedido').first().json);\nconst ubicacion = $input.first().json;\nconst resultado = new ZonaCobertura().evaluar(pedido, ubicacion);\n\nreturn [{ json: { id: pedido.id, ubicacion: ubicacion.regionName, ...resultado } }];"
+        "jsCode": "// ====== CLASES Y REGLAS DE NEGOCIO ======\nclass Pedido {\n  constructor(datos = {}) {\n    const { id, cliente, total } = datos || {};\n    this.id = id;\n    this.cliente = cliente;\n    this.total = total;\n  }\n\n  estaCompleto() {\n    return (\n      typeof this.cliente === \"string\" &&\n      this.cliente.trim().length > 0 &&\n      typeof this.total === \"number\" &&\n      Number.isFinite(this.total) &&\n      this.total > 0\n    );\n  }\n\n  tieneEnvioGratis() {\n    return this.total >= 50000;\n  }\n}\n\nclass ZonaCobertura {\n  constructor() {\n    this.zonasPrincipales = [\"san jose\", \"heredia\", \"alajuela\", \"cartago\"];\n    this.zonasExtendidas = [\"guanacaste\", \"puntarenas\", \"limon\"];\n  }\n\n  limpiar(texto) {\n    return (texto || \"\")\n      .normalize(\"NFD\")\n      .replace(/[\\u0300-\\u036f]/g, \"\")\n      .toLowerCase();\n  }\n\n  estaEnCobertura(codigoPais) {\n    return codigoPais === \"CR\";\n  }\n\n  calcularCostoEnvio(region, pedido) {\n    const r = this.limpiar(region);\n    const zonaPrincipal = this.zonasPrincipales.some((z) => r.includes(z));\n    const zonaExtendida = this.zonasExtendidas.some((z) => r.includes(z));\n    if (!zonaPrincipal && !zonaExtendida) return null;\n    if (pedido.tieneEnvioGratis()) return 0;\n    return zonaPrincipal ? 2500 : 4500;\n  }\n\n  evaluar(pedido, ubicacion) {\n    if (\n      !pedido ||\n      typeof pedido.estaCompleto !== \"function\" ||\n      !pedido.estaCompleto()\n    ) {\n      return { estado: \"rechazado\", motivo: \"Datos incompletos\" };\n    }\n    if (!ubicacion || !ubicacion.status) {\n      return { estado: \"rechazado\", motivo: \"Datos incompletos\" };\n    }\n    if (ubicacion.status !== \"success\") {\n      return { estado: \"rechazado\", motivo: \"No se pudo verificar la ubicación\" };\n    }\n    if (\n      typeof ubicacion.countryCode !== \"string\" ||\n      typeof ubicacion.regionName !== \"string\" ||\n      !ubicacion.regionName.trim()\n    ) {\n      return { estado: \"rechazado\", motivo: \"Datos incompletos\" };\n    }\n    if (!this.estaEnCobertura(ubicacion.countryCode)) {\n      return { estado: \"rechazado\", motivo: \"Fuera de zona de cobertura\" };\n    }\n    const costo = this.calcularCostoEnvio(ubicacion.regionName, pedido);\n    if (costo === null) {\n      return { estado: \"rechazado\", motivo: \"Zona no reconocida\" };\n    }\n    return { estado: \"aceptado\", motivo: \"\", costoEnvio: costo };\n  }\n}\n\n// ====== CONEXIÓN CON LOS DATOS REALES DE N8N ======\nconst pedido = new Pedido($(\"Buscar pedido\").first().json);\nconst ubicacion = $input.first().json;\nconst resultado = new ZonaCobertura().evaluar(pedido, ubicacion);\n\nreturn [{\n  json: {\n    id: pedido.id,\n    estado: resultado.estado,\n    motivo: resultado.motivo,\n    costoEnvio: resultado.costoEnvio ?? null,\n    ubicacion:\n      ubicacion && typeof ubicacion.regionName === \"string\"\n        ? ubicacion.regionName\n        : null,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -122,6 +122,42 @@
       ],
       "id": "341ae70d-9368-4516-8566-0d39bda9b628",
       "name": "Pedido no existe"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7f5f826c-32b2-4d30-a564-f28a065bf98f",
+              "name": "id",
+              "value": "={{ $('Buscar pedido').first().json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "3d0b4ea3-b619-48ce-830c-cf5fdbe2c84a",
+              "name": "estado",
+              "value": "rechazado",
+              "type": "string"
+            },
+            {
+              "id": "8acc4503-fb44-4793-96e6-c95815a18eca",
+              "name": "motivo",
+              "value": "No fue posible consultar el servicio de ubicación",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -176,
+        -768
+      ],
+      "id": "99b53f32-c050-49ed-9d84-2e6970e2770d",
+      "name": "Error al consultar IP"
     },
     {
       "parameters": {
@@ -220,6 +256,24 @@
         [
           {
             "node": "Evaluar cobertura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error al consultar IP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error al consultar IP": {
+      "main": [
+        [
+          {
+            "node": "Rechazar pedido",
             "type": "main",
             "index": 0
           }
